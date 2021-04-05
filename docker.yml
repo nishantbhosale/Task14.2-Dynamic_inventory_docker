@@ -1,0 +1,62 @@
+- hosts: localhost
+  vars_prompt:
+          - name: containern
+            prompt: "Enter The Container Name"
+            private: no
+
+  tasks:
+          - name: Creating Docker Repository
+            yum_repository:
+                    name: docker
+                    baseurl: https://download.docker.com/linux/centos/7/x86_64/stable
+                    gpgcheck: no
+                    description: Docker Repo
+
+          - name: install docker
+            command: "docker"
+            register: docker_status
+            failed_when: false
+
+          - name: Installing Docker
+            command: yum install docker-ce -y --nobest
+            when: docker_status.rc != 0
+            args:
+                    warn: no
+
+          - name: Start Docker
+            service:
+                    name: docker
+                    state: started
+
+          - name: Installing docker-py to suuport ansible docker integration
+            pip:
+                    name: docker-py
+                    state: present
+
+          - name: Pull Httpd image
+            docker_image:
+                    name: httpd
+                    source: pull
+
+          - name: copy webpage
+            copy:
+                    dest: /var/www/html/index.php
+                    src: index.php
+
+          - name: Start HTTPD Container
+            docker_container:
+                    name : "{{containern}}"
+                    image: httpd
+                    state: started
+                    volumes: "/var/www/html/:/usr/local/apache2/htdocs/"
+                    published_ports:
+                            - 1234:80
+            register: docker_info
+
+          - debug:
+                  var: docker_info.container.NetworkSettings.IPAddress
+
+          - name: "Retriving IP dynamically and updating in inventory"
+            template:
+                    src: "hosts.txt"
+                    dest: "/root/Task10/hosts.txt"
